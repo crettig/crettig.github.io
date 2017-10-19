@@ -1,6 +1,7 @@
 [project]
 title = PJP Snake
 version = 0.1
+compress_archive = 0
 
 [bootstrap]
 main_collection = /main/main.collectionc
@@ -15,15 +16,13 @@ height = 720
 [physics]
 scale = 0.02
 
-[script]
-shared_state = 0
-
 [network]
-http_timeout = 200.0
+http_timeout = 0.0
 
 [html5]
-set_custom_heap_size = 1
 include_dev_tool = 0
-custom_heap_size = 32843545
 archive_location_prefix = 
+
+[resource]
+http_cache = 1
 
