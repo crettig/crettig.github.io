@@ -67,11 +67,9 @@
 	<script type='text/javascript'>
 		var extra_params = {
 			archive_location_filter: function( path ) {
-				return ("archive" + path + "");
+				return ("" + path + "");
 			},
             
-			engine_arguments: ["--verify-graphics-calls=false"],
-			
 			splash_image: "splash_image.png",
 			custom_heap_size: 268435456
 		}
