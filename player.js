@@ -1,97 +1,291 @@
-import Phaser from 'phaser';
-import { CasinoFloorTypes } from './casinoTileTypes.js';
+import { BottleOfRegret } from './bottleOfRegret.js';
+import { BoomerangFlask } from './boomerangFlask.js';
+import { JackpotJavelin } from './jackpotJavelin.js';
+import { MeatHorn } from './meatHorn.js';
+import { FontStyles } from './fontStyles.js';
+import { Characters } from './characterData.js';
 export class Player {
-  constructor(scene, x, y, characterData) {
+  constructor(scene, x, y, characterKey) {
     this.scene = scene;
-    this.characterKey = characterData.name;
-    this.levelGenerator = scene.levelGenerator; // Store reference to level generator
+    this.characterKey = characterKey;
+    this.mobileAttackVector = new Phaser.Math.Vector2(0, 0);
+    this.stats = Characters[this.characterKey];
+    this.maxHealth = 100;
+    this.health = this.maxHealth;
+    this.buzzShield = 0;
+    this.maxBuzzShield = 50; // Max shield capacity
+    this.speed = 180 * this.stats.movement;
+    this.lastDamageTime = 0;
+    this.lastDirection = 'down';
+    this.isAttacking = false; // General flag, but individual weapons manage their own cooldowns
+    this.attackStartTime = 0;
+    this.isAttackHeld = false;
+    this.level = 1;
+    this.xp = 0;
+    this.xpToNextLevel = 100;
     this.sprite = scene.physics.add.sprite(x, y, this.characterKey);
-    this.sprite.setDepth(10); // Ensure player is rendered above the ground layer
-    this.sprite.setScale(0.5);
-    // Set hitbox width to match tile size for better corridor navigation
-    const newWidth = this.levelGenerator.config.tileSize;
-    const newHeight = this.sprite.height * 0.75; // Keep height proportional
-    this.sprite.body.setSize(newWidth, newHeight);
-    
-    // Recalculate offset to keep the new hitbox centered
-    const offsetX = (this.sprite.width - newWidth) / 2;
-    const offsetY = (this.sprite.height - newHeight) / 2;
-    this.sprite.body.setOffset(offsetX, offsetY);
-    // Player should now collide with the static world bounds
+    this.sprite.setPipeline('Light2D');
+    this.sprite.setDisplaySize(48, 48);
+    this.sprite.body.setSize(24, 32).setOffset(12, 16);
     this.sprite.setCollideWorldBounds(true);
-    this.speed = characterData.speed;
-    this.aimAngle = 0;
     
-    // Add glow effect
-    this.sprite.setTint(0xffeeaa);
-    // Sound effects
-    this.walkSound = this.scene.sound.add('walk_grass', { loop: true, volume: 0.3 });
+    this.sprite.anims.play(`${this.characterKey}-walk-down`);
+    this.sprite.anims.stop();
+    this.weapons = [
+      new BottleOfRegret(scene, this),
+      new BoomerangFlask(scene, this),
+      new JackpotJavelin(scene, this),
+      new MeatHorn(scene, this)
+    ];
+    this.currentWeaponIndex = 0;
+    this.weapon = this.weapons[this.currentWeaponIndex];
+    this.weapons.forEach((w, index) => {
+        if(index !== this.currentWeaponIndex) {
+            w.sprite.setVisible(false);
+            w.sprite.body.setEnable(false);
+        }
+    });
+    scene.input.on('wheel', (pointer, gameObjects, deltaX, deltaY) => {
+      this.switchWeapon(deltaY);
+    });
+    this.playSpawnSound();
+    
+    this.stealthIndicator = this.scene.add.graphics();
+    this.stealthIndicator.setDepth(this.sprite.depth - 1); // Draw behind player
   }
-  update(keys, mobileControls) {
-    let velocityX = 0;
-    let velocityY = 0;
-    if (mobileControls && mobileControls.isTouchDevice) {
-      // Use joystick for movement
-      const moveVector = mobileControls.moveVector;
-      velocityX = moveVector.x * this.speed;
-      velocityY = moveVector.y * this.speed;
+  applyShameDebuff() {
+      if (this.shameDebuffActive) return;
+      this.shameDebuffActive = true;
+      this.stats.haste *= 0.9; // -10% attack speed
+      this.weapons.forEach(w => w.updateConfig());
+      const shameText = this.scene.add.text(this.sprite.x, this.sprite.y - 40, 'SHAME!', {
+          ...FontStyles.buzz,
+          fontSize: '22px',
+          fill: '#FFA07A' // Light Salmon color
+      }).setOrigin(0.5).setDepth(101);
+      this.scene.tweens.add({
+          targets: shameText,
+          y: this.sprite.y - 70,
+          alpha: 0,
+          duration: 1500,
+          ease: 'Power1',
+          onComplete: () => shameText.destroy()
+      });
+      this.scene.time.delayedCall(5000, () => {
+          this.shameDebuffActive = false;
+          this.stats.haste /= 0.9; // Restore haste
+          this.weapons.forEach(w => w.updateConfig());
+      });
+  }
+  switchWeapon(scrollDelta) {
+    if (this.isAttacking || this.isAttackHeld) return;
+    this.weapon.sprite.setVisible(false);
+    if (scrollDelta > 0) {
+      this.currentWeaponIndex = (this.currentWeaponIndex + 1) % this.weapons.length;
     } else {
-      // Use keyboard for movement
-      if (keys.A.isDown) velocityX = -this.speed;
-      if (keys.D.isDown) velocityX = this.speed;
-      if (keys.W.isDown) velocityY = -this.speed;
-      if (keys.S.isDown) velocityY = this.speed;
+      this.currentWeaponIndex = (this.currentWeaponIndex - 1 + this.weapons.length) % this.weapons.length;
     }
-    // Diagonal movement normalization
-    if (velocityX !== 0 && velocityY !== 0 && !(mobileControls && mobileControls.isTouchDevice)) {
-      // Normalize only for keyboard, joystick vector is already normalized
-      velocityX *= 0.707;
-      velocityY *= 0.707;
+    this.weapon = this.weapons[this.currentWeaponIndex];
+    this.weapon.sprite.setVisible(true);
+    this.scene.uiManager.updateWeaponUI();
+  }
+  update(cursors, wasd, joystickCursors) {
+    this.weapon.update();
+    this.updateStealthIndicator();
+    
+    // Buzz shield decay
+    if (this.buzzShield > 0) {
+        this.buzzShield -= 0.1; // Decay rate
+        if (this.buzzShield < 0) this.buzzShield = 0;
     }
-    this.sprite.setVelocity(velocityX, velocityY);
-    // Player animation based on velocity
-    if (Math.abs(velocityX) > 0.1 || Math.abs(velocityY) > 0.1) {
-        if (Math.abs(velocityY) > Math.abs(velocityX)) {
-            if (velocityY < 0) this.sprite.anims.play(this.characterKey + '_walkUp', true);
-            else this.sprite.anims.play(this.characterKey + '_walkDown', true);
-        } else {
-            if (velocityX < 0) this.sprite.anims.play(this.characterKey + '_walkLeft', true);
-            else this.sprite.anims.play(this.characterKey + '_walkRight', true);
+    // Attack logic
+    const pointer = this.scene.input.activePointer;
+    const isTouch = this.scene.sys.game.device.input.touch;
+    let isAttackingNow = false;
+    let attackPointer = pointer; // Default to mouse/touch pointer
+    if (isTouch) {
+        const buttons = this.scene.uiManager.directionalAttackButtons;
+        this.mobileAttackVector.reset();
+        if (buttons.up?.isDown) this.mobileAttackVector.y -= 1;
+        if (buttons.down?.isDown) this.mobileAttackVector.y += 1;
+        if (buttons.left?.isDown) this.mobileAttackVector.x -= 1;
+        if (buttons.right?.isDown) this.mobileAttackVector.x += 1;
+        isAttackingNow = this.mobileAttackVector.length() > 0;
+        if(isAttackingNow) {
+            // Create a fake pointer object for aiming
+            attackPointer = {
+                worldX: this.sprite.x + this.mobileAttackVector.x * 100,
+                worldY: this.sprite.y + this.mobileAttackVector.y * 100,
+                isDown: true
+            };
         }
     } else {
-        this.sprite.anims.stop();
-        this.sprite.anims.stop();
-        this.sprite.setFrame(9); // Idle frame
+        const isPointerOnJoystick = this.scene.joyStick && this.scene.joyStick.pointer === pointer;
+        isAttackingNow = pointer.isDown && !isPointerOnJoystick;
     }
-    this.handleFootstepSounds();
-  }
-  handleFootstepSounds() {
-    const isMoving = this.sprite.body.velocity.length() > 0.1;
-    
-    // Only check for tile type if the level generator exists (i.e., not in DemoScene)
-    if (this.levelGenerator && this.levelGenerator.groundLayer && this.levelGenerator.groundLayer.getTileAtWorldXY) {
-      const tile = this.levelGenerator.groundLayer.getTileAtWorldXY(this.sprite.x, this.sprite.y);
-      // We'll check for any carpet or wood floors to play footstep sounds
-      const isOnCarpet = tile && tile.tileset && (
-        CasinoFloorTypes.BROWN_CARPET.indices.includes(tile.index - tile.tileset.firstgid) ||
-        CasinoFloorTypes.WOOD_PANEL.indices.includes(tile.index - tile.tileset.firstgid)
-      );
-      const shouldPlaySound = isMoving && isOnCarpet;
-      if (shouldPlaySound && !this.walkSound.isPlaying) {
-        this.walkSound.play();
-      } else if (!shouldPlaySound && this.walkSound.isPlaying) {
-        this.walkSound.stop();
+    // Check for attack start (press)
+    if (isAttackingNow && !this.isAttackHeld) {
+      if (this.weapon.canAttack()) {
+        this.weapon.attack(attackPointer);
       }
-    } else if (this.walkSound.isPlaying) {
-        // If we are in a scene without a level generator, make sure sounds are stopped.
-        this.walkSound.stop();
+    }
+    // Check for attack end (release)
+    else if (!isAttackingNow && this.isAttackHeld) {
+      if (typeof this.weapon.endAttack === 'function') {
+        this.weapon.endAttack(pointer);
+      }
+    }
+    
+    this.isAttackHeld = isAttackingNow;
+    let velocityX = 0;
+    let velocityY = 0;
+    if (cursors.left.isDown || wasd.A.isDown || joystickCursors.left.isDown) {
+      velocityX = -this.speed;
+    } else if (cursors.right.isDown || wasd.D.isDown || joystickCursors.right.isDown) {
+      velocityX = this.speed;
+    }
+    if (cursors.up.isDown || wasd.W.isDown || joystickCursors.up.isDown) {
+      velocityY = -this.speed;
+      } else if (cursors.down.isDown || wasd.S.isDown || joystickCursors.down.isDown) {
+      velocityY = this.speed;
+    }
+    if (!this.weapon.isAttacking) {
+       this.weapon.sprite.setVisible(true);
+    }
+    this.sprite.setVelocity(velocityX, velocityY);
+    if (velocityX !== 0 || velocityY !== 0) {
+      if (velocityY < 0) {
+        this.sprite.anims.play(`${this.characterKey}-walk-up`, true);
+        this.lastDirection = 'up';
+      } else if (velocityY > 0) {
+        this.sprite.anims.play(`${this.characterKey}-walk-down`, true);
+        this.lastDirection = 'down';
+      } else if (velocityX < 0) {
+        this.sprite.anims.play(`${this.characterKey}-walk-left`, true);
+        this.lastDirection = 'left';
+      } else if (velocityX > 0) {
+        this.sprite.anims.play(`${this.characterKey}-walk-right`, true);
+        this.lastDirection = 'right';
+      }
+    } else {
+      this.sprite.anims.stop();
     }
   }
-  updateAim(pointer) {
-    const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
-    this.aimAngle = Phaser.Math.Angle.Between(
-      this.sprite.x, this.sprite.y,
-      worldPoint.x, worldPoint.y
-    );
+
+  takeDamage(amount) {
+    const currentTime = this.scene.time.now;
+    if (currentTime - this.lastDamageTime > 500 && this.health > 0) {
+      if (this.buzzShield > 0) {
+          const damageAbsorbed = Math.min(this.buzzShield, amount);
+          this.buzzShield -= damageAbsorbed;
+          amount -= damageAbsorbed;
+      }
+      if (amount > 0) {
+        this.health = Math.max(0, this.health - amount);
+      }
+      this.lastDamageTime = currentTime;
+      
+      this.sprite.setTint(0xFF6666);
+      this.scene.time.delayedCall(200, () => {
+        if (this.sprite.active) {
+            this.sprite.clearTint();
+        }
+      });
+      this.scene.cameras.main.shake(150, 0.015);
+      this.playHitSound();
+      if (this.health <= 0) {
+          this.die();
+      }
+    }
+  }
+
+  heal(amount) {
+    this.health = Math.min(this.maxHealth, this.health + amount);
+    this.sprite.setTint(0x66FF66);
+    this.scene.time.delayedCall(300, () => {
+        if (this.sprite.active) {
+            this.sprite.clearTint();
+        }
+    });
+  }
+  die() {
+      this.sprite.setVelocity(0, 0);
+      this.sprite.anims.stop();
+      this.sprite.setTint(0x444444);
+      this.scene.handlePlayerDeath();
+  }
+  gainXP(amount) {
+    this.xp += amount;
+    if (this.xp >= this.xpToNextLevel) {
+        this.levelUp();
+    }
+  }
+  levelUp() {
+      this.level++;
+      this.xp -= this.xpToNextLevel;
+      this.xpToNextLevel = Math.floor(100 * Math.pow(1.15, this.level - 1));
+      
+      this.showLevelUpEffect();
+      
+      this.scene.physics.pause();
+      this.scene.tweens.pauseAll();
+      this.scene.scene.launch('LevelUpScene', { player: this });
+  }
+  showLevelUpEffect() {
+      // Trigger a level up effect
+      const levelUpText = this.scene.add.text(this.sprite.x, this.sprite.y - 40, 'LEVEL UP!', {
+          ...FontStyles.title,
+          fontSize: '24px',
+          strokeThickness: 4,
+          fill: '#33FF33'
+      }).setOrigin(0.5).setDepth(101);
+      this.scene.tweens.add({
+          targets: levelUpText,
+          y: this.sprite.y - 80,
+          alpha: 0,
+          duration: 1500,
+          ease: 'Power1',
+          onComplete: () => levelUpText.destroy()
+      });
+  }
+  grantBuzzShield(amount) {
+    this.buzzShield = Math.min(this.maxBuzzShield, this.buzzShield + amount);
+    if (this.shieldGainTween) this.shieldGainTween.stop();
+    this.shieldGainTween = this.scene.tweens.add({
+        targets: this.scene.uiManager.shieldBar,
+        scaleX: [1.1, 1],
+        scaleY: [1.1, 1],
+        duration: 200,
+        ease: 'Sine.easeInOut'
+    });
+  }
+  playSpawnSound() {
+      const soundKey = this.stats.sounds?.spawn;
+      if (soundKey) {
+          this.scene.audioManager.playSound(soundKey, { volume: 0.8 });
+      }
+  }
+  playHitSound() {
+      const soundKey = this.stats.sounds?.hit;
+      if (soundKey) {
+          this.scene.audioManager.playSound(soundKey, { volume: 0.7 });
+      }
+  }
+  playDeathSound() {
+      const soundKey = this.stats.sounds?.death;
+      if (soundKey) {
+          this.scene.audioManager.playSound(soundKey, { volume: 0.9 });
+      }
+  }
+  updateStealthIndicator() {
+    this.stealthIndicator.clear();
+    
+    // We assume a base enemy detection range of 150 for the visualizer, as defined in Enemy.js.
+    const baseDetectionRange = 150;
+    const effectiveRadius = baseDetectionRange / (this.stats.stealth || 1);
+    
+    this.stealthIndicator.lineStyle(2, 0x00FFFF, 0.25); // Cyan, semi-transparent
+    this.stealthIndicator.strokeCircle(this.sprite.x, this.sprite.y, effectiveRadius);
+    this.stealthIndicator.setDepth(this.sprite.depth - 1);
   }
 }

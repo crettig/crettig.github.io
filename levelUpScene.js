@@ -1,73 +1,106 @@
 import Phaser from 'phaser';
+import { FontStyles } from './fontStyles.js';
+import { Button } from './button.js';
+
 export class LevelUpScene extends Phaser.Scene {
     constructor() {
         super({ key: 'LevelUpScene' });
     }
+
+    init(data) {
+        this.player = data.player;
+        this.gameScene = this.scene.get('GameScene');
+    }
+
     create() {
-        const gameScene = this.scene.get('GameScene');
-        const availableUpgrades = this.getAvailableUpgrades(gameScene);
-        // Dark, semi-transparent background
-        const bg = this.add.rectangle(0, 0, this.cameras.main.width, this.cameras.main.height, 0x000000, 0.7).setOrigin(0);
-        // Title
-        this.add.text(this.cameras.main.width / 2, 150, 'LEVEL UP!', {
-            fontFamily: "'Courier New', monospace",
-            fontSize: '64px',
-            color: '#74b9ff',
-            align: 'center',
-            stroke: '#fff',
-            strokeThickness: 2
-        }).setOrigin(0.5);
+        this.cameras.main.setBackgroundColor('rgba(0,0,0,0.8)');
         
-        // Choose 3 unique upgrades
-        const chosenUpgrades = Phaser.Utils.Array.Shuffle(availableUpgrades).slice(0, 3);
+        const { width, height } = this.cameras.main;
+
+        this.add.text(width / 2, height * 0.2, 'LEVEL UP!', FontStyles.title)
+            .setOrigin(0.5);
+
+        this.add.text(width / 2, height * 0.3, 'Choose an Upgrade', FontStyles.subtitle)
+            .setOrigin(0.5);
+
+        const availableUpgrades = this.getAvailableUpgrades();
+        const optionsToShow = this.selectRandomUpgrades(availableUpgrades, 3);
         
-        chosenUpgrades.forEach((upgrade, index) => {
-            const yPos = 300 + index * 100;
-            const button = this.add.text(this.cameras.main.width / 2, yPos, upgrade.text, {
-                fontFamily: "'Courier New', monospace",
-                fontSize: '32px',
-                color: '#ffffff',
-                backgroundColor: '#444444',
-                padding: { x: 20, y: 10 },
-                align: 'center'
-            }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-            button.on('pointerdown', () => {
-                upgrade.apply(gameScene);
-                gameScene.updateHUD(); // Ensure HUD reflects changes
-                this.scene.stop();
-                this.scene.resume('GameScene');
-            });
+        optionsToShow.forEach((option, index) => {
+            const yPos = height * 0.45 + index * 100;
+            const cardBg = this.add.graphics();
+            cardBg.fillStyle(0x111111, 0.9);
+            cardBg.lineStyle(2, 0xeeeeee, 1);
+            cardBg.fillRoundedRect(width / 2 - 200, yPos - 40, 400, 80, 10);
+            cardBg.strokeRoundedRect(width / 2 - 200, yPos - 40, 400, 80, 10);
             
-            button.on('pointerover', () => button.setBackgroundColor('#ff6b6b'));
-            button.on('pointerout', () => button.setBackgroundColor('#444444'));
+            const title = this.add.text(width / 2, yPos - 15, option.title, { ...FontStyles.subtitle, fontSize: '20px' }).setOrigin(0.5);
+            const description = this.add.text(width / 2, yPos + 15, option.description, { ...FontStyles.body, fontSize: '16px', wordWrap: { width: 380 } }).setOrigin(0.5);
+
+            const cardContainer = this.add.container(0, 0, [cardBg, title, description]);
+            cardContainer.setInteractive(new Phaser.Geom.Rectangle(width / 2 - 200, yPos - 40, 400, 80), Phaser.Geom.Rectangle.Contains);
+            cardContainer.on('pointerdown', () => {
+                option.apply();
+                this.closeScene();
+            });
+            cardContainer.on('pointerover', () => cardBg.lineStyle(3, 0xFFD700, 1).strokeRoundedRect(width / 2 - 200, yPos - 40, 400, 80, 10));
+            cardContainer.on('pointerout', () => cardBg.lineStyle(2, 0xeeeeee, 1).strokeRoundedRect(width / 2 - 200, yPos - 40, 400, 80, 10));
         });
     }
-    getAvailableUpgrades(gameScene) {
-        const upgrades = [
-            { id: 'hp_boost', text: 'Full Heal & +20 Max HP', apply: (scene) => {
-                scene.gameState.maxHealth += 20;
-                scene.gameState.playerHealth = scene.gameState.maxHealth;
-            }},
-            { id: 'speed_boost', text: '+15% Movement Speed', apply: (scene) => {
-                scene.player.speed *= 1.15;
-            }},
-            { id: 'luck_boost', text: '+10 Luck', apply: (scene) => {
-                scene.gameState.luck += 10;
-            }}
-        ];
-        // Add upgrades for each weapon the player has
-        const weaponManager = gameScene.weaponManager;
-        weaponManager.weaponOrder.forEach(weaponId => {
-            const weaponData = Object.values(weaponManager.weapons).find(w => w.id === weaponId);
-            const level = weaponManager.weaponLevels[weaponId];
+
+    closeScene() {
+        this.gameScene.physics.resume();
+        this.gameScene.tweens.resumeAll();
+        this.scene.stop();
+    }
+
+    getAvailableUpgrades() {
+        const player = this.player;
+        const weapons = player.weapons;
+        let upgrades = [];
+
+        // Player stat upgrades
+        upgrades.push({
+            title: 'Max Health +20',
+            description: 'Increases your maximum health by 20.',
+            apply: () => { player.maxHealth += 20; player.heal(20); }
+        });
+        upgrades.push({
+            title: 'Movement Speed +5%',
+            description: 'Increases your base movement speed.',
+            apply: () => { player.stats.movement *= 1.05; player.speed = 180 * player.stats.movement; }
+        });
+        upgrades.push({
+            title: 'Luck +10%',
+            description: 'Slightly increases your chances for good outcomes.',
+            apply: () => { player.stats.luck *= 1.1; }
+        });
+         upgrades.push({
+            title: 'Haste +7%',
+            description: 'Reduces weapon cooldowns.',
+            apply: () => { player.stats.haste *= 1.07; player.weapons.forEach(w => w.updateConfig()); }
+        });
+        upgrades.push({
+            title: 'Strength +10%',
+            description: 'Increases base damage for all weapons.',
+            apply: () => { player.stats.strength *= 1.1; player.weapons.forEach(w => w.updateConfig()); }
+        });
+
+
+        // Weapon-specific upgrades
+        weapons.forEach(weapon => {
             upgrades.push({
-                id: `upgrade_${weaponId}`,
-                text: `Upgrade ${weaponData.name} (Lvl ${level + 1})`,
-                apply: (scene) => {
-                    scene.weaponManager.upgradeWeapon(weaponId);
-                }
+                title: `Upgrade ${weapon.constructor.name}`,
+                description: `Levels up your ${weapon.constructor.name}, improving its stats.`,
+                apply: () => weapon.upgrade()
             });
         });
+
         return upgrades;
+    }
+
+    selectRandomUpgrades(upgrades, count) {
+        Phaser.Utils.Array.Shuffle(upgrades);
+        return upgrades.slice(0, count);
     }
 }

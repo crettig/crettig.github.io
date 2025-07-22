@@ -3,219 +3,31 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Carnival Nightmare</title>
+    <title>Ancient Ruins Explorer</title>
     <script type="importmap">
       {
         "imports": {
           "phaser": "https://esm.sh/phaser@3.70.0",
-          "nipplejs": "https://esm.sh/nipplejs@0.10.1"
+          "phaser/": "https://esm.sh/phaser@3.70.0/"
         }
       }
     </script>
     <style>
-      @font-face {
-        font-family: 'CarnivalFreakshow';
-        src: url('https://play.rosebud.ai/assets/CarnevaleeFreakshow-TitleFont.ttf?EMXt') format('truetype');
-        font-display: swap;
-      }
       body {
         margin: 0;
         padding: 0;
         height: 100vh;
         overflow: hidden;
-        background: #1a1a2e;
-        font-family: 'Courier New', monospace;
+        background: linear-gradient(135deg, #8B7355 0%, #A0956B 100%);
       }
       #phaser-game-container {
         width: 100%;
         height: 100%;
       }
-      #ui-overlay {
-        position: absolute;
-        top: 20px;
-        left: 20px;
-        color: #fff;
-        font-size: 18px;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
-        z-index: 1000;
-      }
-      #pause-ui {
-        position: absolute;
-        top: 20px;
-        right: 20px;
-        z-index: 1001; /* Above other UI */
-      }
-      #pause-button {
-        width: 50px;
-        height: 50px;
-        background-color: rgba(0, 0, 0, 0.5);
-        border: 2px solid #fff;
-        color: #fff;
-        font-size: 24px;
-        cursor: pointer;
-        border-radius: 8px;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-      }
-      #pause-button:hover {
-        background-color: rgba(255, 255, 255, 0.2);
-      }
-      #weapon-ui {
-        position: absolute;
-        bottom: 20px;
-        right: 20px;
-        color: #fff;
-        text-align: right;
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        gap: 10px;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
-        z-index: 1001; /* Ensure it's above joystick zones */
-      }
-      #weapon-icon {
-        width: 64px;
-        height: 64px;
-        filter: drop-shadow(2px 4px 6px black);
-      }
-      #weapon-switch-button {
-        display: none; /* Hidden by default, shown for touch devices */
-        position: absolute;
-        bottom: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        padding: 10px 20px;
-        background-color: rgba(0, 0, 0, 0.6);
-        border: 2px solid #fff;
-        color: #fff;
-        font-size: 18px;
-        cursor: pointer;
-        border-radius: 12px;
-        z-index: 1001;
-      }
-      #weapon-switch-button:hover {
-        background-color: rgba(255, 255, 255, 0.2);
-      }
-      #xp-bar-container {
-        width: 150px;
-        height: 20px;
-        background-color: #555;
-        border: 2px solid #fff;
-        border-radius: 10px;
-        position: relative;
-        overflow: hidden;
-      }
-      #xp-bar {
-        width: 0%;
-        height: 100%;
-        background-color: #74b9ff;
-        transition: width 0.3s ease-out;
-      }
-      #xp-text {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        font-size: 14px;
-        color: #fff;
-        text-shadow: 1px 1px 2px rgba(0,0,0,1);
-        white-space: nowrap;
-      }
-      #health-container {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin: 8px 0;
-      }
-      #health-bar-container {
-        width: 150px;
-        height: 20px;
-        background-color: #333;
-        border: 2px solid #fff;
-        border-radius: 10px;
-        position: relative;
-        overflow: hidden;
-      }
-      #health-bar {
-        width: 100%;
-        height: 100%;
-        background-color: #45b649; /* Start with green */
-        transition: width 0.3s ease-out, background-color 0.3s ease-out;
-      }
-      #health-text {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        font-size: 14px;
-        color: #fff;
-        text-shadow: 1px 1px 2px rgba(0,0,0,1);
-        white-space: nowrap;
-      }
-      #joystick-zones {
-        display: none; /* Hidden by default, enabled by JS on touch devices */
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        width: 100%;
-        height: 35%;
-        pointer-events: none; /* Pass clicks through the container */
-      }
-      #joystick-move, #joystick-aim {
-        position: absolute;
-        width: 40%;
-        height: 100%;
-        bottom: 0;
-        pointer-events: all; /* Joysticks are interactive */
-        /* For debugging zone layout: */
-        /* background: rgba(255, 0, 0, 0.1); */
-        /* border: 1px solid rgba(255, 255, 255, 0.2); */
-      }
-      #joystick-move {
-        left: 5%;
-      }
-      #joystick-aim {
-        right: 5%;
-        width: 50%; /* Make it wider to compensate for margin */
-        margin-right: -5%; /* Pull it back to the edge */
-        /* padding-right: 180px; /* This deadzone is no longer needed */
-        box-sizing: border-box; /* Include padding in width calculation */
-      }
     </style>
   </head>
   <body>
-    <div id="phaser-game-container" oncontextmenu="return false;"></div>
-    <div id="game-hud" style="display: none;">
-      <div id="ui-overlay">
-        <div>Friends Found: <span id="friends-count">0</span>/5</div>
-        <div>Tickets: <span id="tickets-count">0</span></div>
-        <div id="health-container">
-            <span>Health:</span>
-            <div id="health-bar-container">
-                <div id="health-bar"></div>
-                <span id="health-text">100 / 100</span>
-            </div>
-        </div>
-        <div>Level: <span id="level">1</span></div>
-        <div id="xp-bar-container">
-          <div id="xp-bar"></div>
-          <span id="xp-text">0 / 100</span>
-        </div>
-      </div>
-      <div id="weapon-ui">
-        <div>Weapon: <span id="current-weapon"></span></div>
-        <img id="weapon-icon" src="https://play.rosebud.ai/assets/balloonSword.png?wHT8" alt="Weapon Icon"/>
-      </div>
-      <button id="weapon-switch-button">Switch</button>
-      <div id="pause-ui">
-        <button id="pause-button">❚❚</button>
-      </div>
-    </div>
-    <div id="joystick-zones">
-        <div id="joystick-move"></div>
-        <div id="joystick-aim"></div>
-    </div>
+    <div id="phaser-game-container"></div>
     <script type="module" src="main.js"></script>
     <script src="https://storage.googleapis.com/rosebud_staticfiles/ChatManager.js"></script>
     <script src="https://storage.googleapis.com/rosebud_staticfiles/ImageGenerator.js"></script>
