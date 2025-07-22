@@ -19,6 +19,8 @@ export const GameAssets = {
     { key: 'MeatHornModel', url: 'https://play.rosebud.ai/assets/MeatHornModel.png?VEOE' },
     { key: 'PanicIcon', url: 'https://play.rosebud.ai/assets/MeatHornIconPanic.png?31PP' },
     { key: 'DeafenedIcon', url: 'https://play.rosebud.ai/assets/MeatHornBuffIconDeafened.png?0hOY' },
+    { key: 'VulnerableIcon', url: 'https://play.rosebud.ai/assets/MeatHornBuffIconDeafened.png?0hOY' },
+    { key: 'ArmorShredIcon', url: 'https://play.rosebud.ai/assets/MeatHornIconArmorShred.png?vtAK' }
   ],
   spritesheets: [
     { key: 'BottleOfRegretGhostlyEx', url: 'https://play.rosebud.ai/assets/BottleOfRegretGhostlyEx.png?3OUE', frameConfig: { frameWidth: 48, frameHeight: 48 } },

@@ -41,10 +41,6 @@ export class PreloaderScene extends Phaser.Scene {
     GameAssets.images.forEach(asset => {
         this.load.image(asset.key, asset.url);
     });
-    this.load.image('VulnerableIcon', 'https://play.rosebud.ai/assets/JackpotJavelinIconSkull.png?MGZp');
-    this.load.image('DeafenedIcon', 'https://play.rosebud.ai/assets/MeatHornBuffIconDeafened.png?0hOY');
-    this.load.image('PanicIcon', 'https://play.rosebud.ai/assets/MeatHornIconPanic.png?31PP');
-    this.load.image('ArmorShredIcon', 'https://play.rosebud.ai/assets/JackpotJavelinIconCherry.png?UMxE');
     GameAssets.spritesheets.forEach(asset => {
         // Special handling for character assets to use the character name as the key
         const charKey = Object.keys(Characters).find(key => Characters[key].assetKey === asset.key);
@@ -59,5 +55,8 @@ export class PreloaderScene extends Phaser.Scene {
     });
     this.load.audio('MeatHornCharge', 'https://play.rosebud.ai/assets/MeatHornCharge.mp3?Ht0x');
     this.load.spritesheet('MeatHornConeSpriteSheet', 'https://play.rosebud.ai/assets/MeatHornConeSpriteSheet.png?4KvB', { frameWidth: 192, frameHeight: 192 });
+    // Load custom fonts
+    this.add.text(0, 0, '', { fontFamily: 'Creepster' });
+    this.add.text(0, 0, '', { fontFamily: 'VT323' });
   }
 }

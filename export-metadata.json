@@ -1,13 +1,14 @@
 {
   "name": "Ancient Ruins Explorer",
-  "revisionLabel": "Fix XP Particle Trajectory",
+  "revisionLabel": "Integrate Custom Fonts",
   "description": "",
   "mode": "Universal",
-  "exportDate": "2025-07-22T18:48:04.943Z",
+  "exportDate": "2025-07-22T19:21:02.145Z",
   "assetCount": 25,
   "assetTypes": [
     "mp3",
     "png",
-    "m4a"
+    "m4a",
+    "ttf"
   ]
 }

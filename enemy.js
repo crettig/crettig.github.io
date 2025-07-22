@@ -162,7 +162,6 @@ export class Enemy {
     createClownKnifeDeathEffect(this.scene, this.sprite.x, this.sprite.y);
     this.healthBarBg.destroy();
     this.healthBar.destroy();
-    this.clearAllStatusEffects();
     this.sprite.setTint(0x666666);
     this.sprite.setVelocity(0, 0);
     this.scene.audioManager.playSound('ClownKnifeDeath', { volume: 0.7 });
@@ -184,6 +183,9 @@ export class Enemy {
       scaleY: 0.5,
       duration: 1000,
       onComplete: () => {
+        this.clearAllStatusEffects();
+        Object.values(this.statusIcons).forEach(icon => icon.destroy());
+        this.statusIcons = {};
         this.sprite.destroy();
       }
     });
@@ -338,7 +340,7 @@ export class Enemy {
   }
   applyShred(duration, value) {
       if (!this.statusEffects.isShredded) {
-        this.addStatusIcon('shred', 'MeatHornIconArmorShred');
+        this.addStatusIcon('shred', 'ArmorShredIcon');
       }
       this.statusEffects.isShredded = true;
       this.statusEffects.shredEndTime = this.scene.time.now + duration;
